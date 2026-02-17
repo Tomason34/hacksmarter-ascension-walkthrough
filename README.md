@@ -1,129 +1,87 @@
-# Ascension – HackSmarter Walkthrough
+# HackSmarter: Ascension — Walkthrough
 
-## Overview
-Target: Ascension  
-Techniques Used:
-- NFS Misconfiguration
-- SSH Key Cracking
-- Cron Job Abuse
-- WordPress Database Enumeration
-- Linux Capabilities Privilege Escalation
+**Attack chain:** NFS → SSH key crack → cron abuse → MySQL → capability privesc → root  
+**Environment:** Controlled lab / CTF
 
 ---
 
-## 1. Initial Enumeration
+## Summary
 
-nmap -sC -sV -p- 10.1.88.237
+This machine was compromised through a series of misconfigurations:
 
-Discovered:
-- FTP (21)
-- SSH (22)
-- HTTP (80)
-- NFS (2049)
-- MySQL (3306)
-
----
-
-## 2. NFS Exploitation
-
-showmount -e 10.1.88.237
-
-Found open share:
-/srv/nfs/user1 *
-
-Mounted and found SSH private key.
-
-Cracked with rockyou:
-
-ssh2john id_rsa > ssh.hash  
-john --wordlist=/usr/share/wordlists/rockyou.txt ssh.hash
-
-Gained SSH access as user1.
+1. Public NFS export exposed an SSH private key for `user1`
+2. Weak key passphrase was cracked with a wordlist
+3. A scheduled job executed `/tmp/backup.sh` as `user2` (world-writable path)
+4. WordPress DB credentials were found in `wp-config.php`, revealing `user3` creds + flags
+5. A `python3` binary with `cap_setuid=ep` enabled root escalation
 
 ---
 
-## FLAG 1
+## Key Steps
+
+### 1) Enumeration
+- Found FTP/SSH/HTTP/NFS and later MySQL.
+
+### 2) NFS → SSH key access (user1)
+- Mounted export and extracted `id_rsa`
+- Cracked passphrase and SSH’d into `user1`
+
+**Flag 1**
 RkxBRzF7aGpzeXU4OTIzMzRoam9obnNkOHkyOTNoNH0=
 
----
 
-## 3. Cron Abuse → user2
-
-Discovered /tmp/backup.sh executed by user2.
-
-Injected malicious script to add SSH key.
-
-Logged in as user2.
 
 ---
 
-## FLAG 2
+### 3) Cron abuse → user2
+- `/tmp/backup.sh` executed by `user2`
+- Used it to add my public key to `user2` authorized_keys
+- SSH’d into `user2`
+
+**Flag 2**
 RkxBRzJ7c2RoaDk4MjM0bmpvaG4za2pkajIzM2ZkfQ==
 
----
 
-## 4. WordPress Database Exploitation
-
-Found DB credentials in:
-/var/www/html/wp-config.php
-
-mysql -u wpuser -p
-
-Extracted user3 credentials.
 
 ---
 
-## FLAG 4
+### 4) WordPress DB → user3
+- Read `/var/www/html/wp-config.php`
+- Connected to MySQL as `wpuser`
+- Pulled Flag 4 + `user3` credentials, then `su user3`
+
+**Flag 4**
 RkxBRzR7d2ViamhuYXNkMzg5MjM0a25kam9pM2R9
 
----
 
-## 5. Lateral Movement → user3
-
-su user3
-
----
-
-## FLAG 5
+**Flag 5**
 RkxBRzV7am9obmFiY2RzamhmczgyMzRram5ib3p9
 
----
 
-## 6. Privilege Escalation (Linux Capabilities Abuse)
-
-Found suspicious binary:
-~/python3
-
-getcap ~/python3
-
-Found:
-cap_setuid=ep
-
-Abused capability:
-
-~/python3 -c 'import os; os.setuid(0); os.system("/bin/bash")'
-
-Root obtained.
 
 ---
 
-## FLAG 6
+### 5) Capability privesc → root
+- Found `~/python3` for user3
+- `getcap` showed `cap_setuid=ep`
+- Used it to spawn a root shell
+
+**Flag 6**
 RkxBRzZ7c2RmanVkaGZzODIzNGtqbmJvaG5kamZ9
 
----
 
-## FLAG 3
+**Flag 3**
 RkxBRzN7Z2pkb2huYXNkOTgyMzRram5iY2tkZn0=
 
+
 ---
 
-## Final Summary
+## Defensive Notes
 
-Attack Chain:
-1. NFS exposure → SSH key theft
-2. Key cracked via rockyou
-3. Cron abuse → user2
-4. WordPress DB creds → user3
-5. Capability abuse → root
+- Restrict NFS exports (no `*`), use proper permissions and root-squash where appropriate
+- Never store private keys on world-accessible shares
+- Cron jobs must not execute scripts from world-writable paths like `/tmp`
+- Do not store DB creds in world-readable locations; use least privilege DB users
+- Audit Linux capabilities (`getcap -r / 2>/dev/null`) — treat them like SUID
 
-All flags captured successfully.
+
