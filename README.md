@@ -1,3 +1,4 @@
+⚠️ Disclosure: This write‑up was created with AI assistance, but I did all the actual lab work.
 # HackSmarter: Ascension — Walkthrough
 
 **Attack chain:** NFS → SSH key crack → cron abuse → MySQL → capability privesc → root  
